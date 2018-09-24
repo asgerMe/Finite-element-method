@@ -13,6 +13,13 @@
 #define SIM_NAME_INTEGRATION_MODE "intMode"
 #define SIM_NAME_USE2D "is2D"
 
+#define SIM_NAME_YOUNG "Y"
+#define SIM_NAME_POISSON "v"
+#define SIM_NAME_DENSITY "density"
+#define SIM_NAME_VISCOSITY "viscosity"
+
+#define SIM_NAME_WINKLER "winkler"
+
 
 
 class SIM_ObjectArray;
@@ -27,6 +34,13 @@ namespace HDK_Sample {
 		GETSET_DATA_FUNCS_F(SIM_NAME_ERRORTOLERANCE, errorTolerance);
 		GETSET_DATA_FUNCS_I(SIM_NAME_INTEGRATION_MODE, intMode);
 		GETSET_DATA_FUNCS_I(SIM_NAME_USE2D, bd);
+
+		GETSET_DATA_FUNCS_I(SIM_NAME_WINKLER, winkler);
+
+		GETSET_DATA_FUNCS_F(SIM_NAME_YOUNG, young);
+		GETSET_DATA_FUNCS_F(SIM_NAME_POISSON, poisson);
+		GETSET_DATA_FUNCS_F(SIM_NAME_DENSITY, density);
+		GETSET_DATA_FUNCS_F(SIM_NAME_VISCOSITY, viscosity);
 		
 	protected:
 

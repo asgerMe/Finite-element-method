@@ -30,6 +30,7 @@ public:
 
 	UT_MatrixD element_stiffness_matrix_nl;
 	UT_MatrixD element_stiffness_matrix;
+	UT_MatrixD non_linear_element_3D;
 
 	UT_MatrixD stress_strain_matrix;
 
@@ -75,18 +76,20 @@ public:
 	UT_Matrix3D jacobian;
 	UT_Matrix3D inverse_jacobian;
 
+	UT_Matrix projection;
+	
+	UT_MatrixD non_linear_element_3D;
 	UT_MatrixD B;
-	UT_MatrixD B_temp;
+	UT_MatrixD projectionT;
 	UT_MatrixD BT;
 	UT_MatrixD BNL;
 	UT_MatrixD BNLT;
-	UT_MatrixD BNL_temp;
 
 	UT_MatrixD element_stiffness_matrix_nl;
 	UT_MatrixD element_stiffness_matrix;
-
 	UT_MatrixD stress_strain_matrix;
 
+	UT_Vector stress_vector;
 	UT_MatrixD sigma;
 
 	UT_MatrixD M1;
@@ -95,13 +98,11 @@ public:
 	UT_VectorD m1_holder;
 	UT_VectorD m2_holder;
 
-	UT_VectorD point_values;
 	UT_Matrix3D stress;
-	UT_VectorD stress_vector;
-	UT_VectorD strain_vector;
+	
 
-	UT_Vector4i tetra_points;
-	UT_Vector4i tetra_points_offset;
+	UT_Vector3i tetra_points;
+	UT_Vector3i tetra_points_offset;
 
 	UT_Vector4i bound;
 

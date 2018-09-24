@@ -1,4 +1,5 @@
 #include "SIM_FEMSolver.h"
+#include "Solve_System.h"
 #include <UT/UT_DSOVersion.h>
 #include <PRM/PRM_Include.h>
 #include <SIM/SIM_PRMShared.h>
@@ -18,10 +19,6 @@
 #include "Placeholder.h"
 #include <GU/GU_SDF.h>
 #include <PRM/PRM_ChoiceList.h>
-
-
-
-
 
 
 using namespace HDK_Sample;
@@ -45,11 +42,29 @@ SIM_FEMSolver::getFEMSolverDopDescription()
 	static PRM_Name      theConName(SIM_NAME_CONSTRAINTPASSES, "Sub Steps");
 	static PRM_Name         sopOrdinalName(SIM_NAME_INTEGRATION_MODE, "Integration Mode");
 
+	static PRM_Name         poissonName(SIM_NAME_POISSON, "Poisson Ratio");
+	static PRM_Name         densityName(SIM_NAME_DENSITY, "Density");
+	static PRM_Name         viscosityName(SIM_NAME_VISCOSITY, "Viscosity");
+	static PRM_Name         youngName(SIM_NAME_YOUNG, "Young's Modulus");
+	static PRM_Name			winklerName(SIM_NAME_WINKLER, "Winkler Boundaries");
+
 	static PRM_Name theBoundName(SIM_NAME_USE2D, "Manifold FEM");
-	static PRM_Default errorDefault(0.1);
+
+	static PRM_Default youngDefault(100);
+	static PRM_Default poissonDefault(0.25);
+	static PRM_Default densityDefault(1);
+	static PRM_Default viscosityDefault(0);
+	static PRM_Default substepDefault(1);
+
+	static PRM_Default winklerDefault(0);
+
+	static PRM_Range viscosityRange(PRM_RANGE_RESTRICTED, 0);
+	static PRM_Range densityRange(PRM_RANGE_RESTRICTED, 0.01);
+	static PRM_Range poissonRange(PRM_RANGE_RESTRICTED, 0.001, PRM_RANGE_RESTRICTED, 0.499);
+	static PRM_Range youngsRange(PRM_RANGE_RESTRICTED, 0.01);
+
 	static PRM_Name         sopOrdChoices[] =
 	{
-		PRM_Name("choice1", "Mixed Mode"),
 		PRM_Name("choice2", "Implicit"),
 		PRM_Name("choice3", "Explicit"),
 		PRM_Name("choice4", "Static"),
@@ -59,9 +74,15 @@ SIM_FEMSolver::getFEMSolverDopDescription()
 
 	// define a template for parameters to control the force's behavior
 	static PRM_Template          theTemplates[] = {
-		PRM_Template(PRM_INT,1,&theConName, PRM100Defaults),
-		PRM_Template(PRM_ORD, 1, &sopOrdinalName, 0, &sopOrdinalMenu),
 		PRM_Template(PRM_TOGGLE, 1, &theBoundName, PRMzeroDefaults),
+		PRM_Template(PRM_TOGGLE, 1, &winklerName, PRMzeroDefaults),
+		PRM_Template(PRM_INT,1,&theConName, &substepDefault),
+		PRM_Template(PRM_ORD, 1, &sopOrdinalName, 0, &sopOrdinalMenu),
+		PRM_Template(PRM_FLT, 1, &youngName,  &youngDefault, 0, &youngsRange),
+		PRM_Template(PRM_FLT, 1, &poissonName, &poissonDefault, 0, &poissonRange),
+		PRM_Template(PRM_FLT, 1, &densityName, &densityDefault, 0, &densityRange),
+		PRM_Template(PRM_FLT, 1, &viscosityName, &viscosityDefault, 0, &viscosityRange),
+		PRM_Template(PRM_TOGGLE, 1, &winklerName, PRMzeroDefaults),
 		PRM_Template()
 	};
 
@@ -98,30 +119,18 @@ SIM_Solver::SIM_Result SIM_FEMSolver::solveSingleObjectSubclass(
 			GU_Detail *gdp = lock.getGdp();
 			if (!gdp->getNumPoints())
 				return SIM_SOLVER_FAIL;
-
-			const UT_StringHolder v_name("P0");
-			GA_RWHandleV3D v_handle(gdp->addFloatTuple(GA_ATTRIB_POINT, v_name, 3, GA_Defaults(0.0)));
 		
-			const UT_StringHolder vp_name("v");
-			GA_RWHandleV3D vv_handle(gdp->addFloatTuple(GA_ATTRIB_POINT, vp_name, 3, GA_Defaults(0.0)));
+			GA_RWHandleV3D a0(gdp->findAttribute(GA_ATTRIB_POINT, "P0"));
+			GA_ROHandleV3D a1(gdp->findAttribute(GA_ATTRIB_POINT, "v"));
+			GA_ROHandleV3D a2(gdp->findAttribute(GA_ATTRIB_POINT, "acc"));
+			GA_RWHandleM3D a3(gdp->findAttribute(GA_ATTRIB_PRIMITIVE, "cauchy_stress"));
 
-			const UT_StringHolder accp_name("acc");
-			GA_RWHandleV3D acc_handle(gdp->addFloatTuple(GA_ATTRIB_POINT, accp_name, 3, GA_Defaults(0.0)));
-
-			const UT_StringHolder stress_name("cauchy_stress");
-			GA_RWHandleM3D stress_handle(gdp->addFloatTuple(GA_ATTRIB_PRIMITIVE, stress_name, 9, GA_Defaults(1.0)));
-
-			const UT_StringHolder test_name("test");
-			GA_RWHandleF test_handle(gdp->addFloatTuple(GA_ATTRIB_PRIMITIVE, test_name, 1, GA_Defaults(1.0)));
+			if (a0.isInvalid() || a1.isInvalid() || a2.isInvalid() || a3.isInvalid())
+				return SIM_SOLVER_FAIL;
 
 			GA_ROHandleV3D pp(gdp->findAttribute(GA_ATTRIB_POINT, "P"));
-
 			GA_Iterator primit(gdp->getPrimitiveRange());
-
-			Data_struct ds;
-			
 			unsigned int points = gdp->getPointRange().getEntries();
-			ds.init(points);
 			
 			for (primit; !primit.atEnd(); ++primit)
 			{
@@ -129,16 +138,16 @@ SIM_Solver::SIM_Result SIM_FEMSolver::solveSingleObjectSubclass(
 				const GA_Primitive *prim = gdp->getPrimitive(primoff);
 			
 				UT_Matrix3 init_stress(0.0f);
-				if (stress_handle.isValid())
+				if (a3.isValid())
 				{
-					stress_handle.set(primoff, init_stress);
+					a3.set(primoff, init_stress);
 				}
 				
 				for (GA_Iterator pointit(prim->getPointRange()); !pointit.atEnd(); ++pointit)
 				{
 					GA_Offset ptoff = *pointit;
 					UT_Vector3D position = pp.get(ptoff);
-					v_handle.set(ptoff, position);
+					a0.set(ptoff, position);
 				}	
 			}
 		}
@@ -154,6 +163,11 @@ SIM_Solver::SIM_Result SIM_FEMSolver::solveSingleObjectSubclass(
 			GU_Detail *gdp = lock.getGdp();
 			
 			Material parms;
+			parms.density = getdensity();
+			parms.viscosity = getviscosity();
+			parms.youngs_modulus = getyoung();
+			parms.poisson_ratio = getpoisson();
+
 			parms.dt = time_step;
 			parms.dt = parms.dt / sub_steps;
 
@@ -162,101 +176,21 @@ SIM_Solver::SIM_Result SIM_FEMSolver::solveSingleObjectSubclass(
 			if (getintMode() == 0)
 				__explicit__ = false;
 			if (getintMode() == 1)
-				__explicit__ = false;
-			if (getintMode() == 2)
 				__explicit__ = true;
-			if (getintMode() == 3)
+			if (getintMode() == 2)
 			{
 				__explicit__ = false;
-				w.theta = 1;
+				w.theta = 1.0;
 			}
-
-				
-			Data_struct ds;
-			unsigned int points = gdp->getPointRange().getEntries();
-			ds.init(points);
-
-			gridUpdate::assemble_E(ds, parms);
-			gridUpdate::assemble_m2(ds, parms);
-			gridUpdate::assemble_m1(ds, parms);
-
-			for (unsigned int i = 0; i < sub_steps; i++)
-			{
-				const SIM_Geometry *reference_geo = object.getGeometry();
-				SIM_GeometryAutoReadLock  const_lock(reference_geo);
-				const GU_Detail *reference_gdp = const_lock.getGdp();
-				GA_Iterator primit(gdp->getPrimitiveRange());
-				ds.clear_globals();
-				ds.i = i;
-				bool use_vic = false;
-
-				for (primit; !primit.atEnd(); ++primit)
-				{
-					GA_Offset primoff = *primit;
-					const GA_Primitive *prim = gdp->getPrimitive(primoff);
-					if (prim->getPointRange().getEntries() != 4)
-						continue;
-
-					bool attribute_present = false;
-
-					gridUpdate::update_material_parms(gdp, prim, ds, parms, attribute_present, use_vic);
-
-					if (attribute_present)
-					{
-						gridUpdate::assemble_E(ds, parms);
-						gridUpdate::assemble_m2(ds, parms);
-						gridUpdate::assemble_m1(ds, parms);
-					}
-
-					gridUpdate::update_tetrapoints(gdp, prim, ds);
-					gridUpdate::global_indices(gdp, ds);
-					gridUpdate::update_jacobians(gdp, prim, ds);
-					gridUpdate::assemble_B(ds);
-
-					if (!__explicit__)  //Assemble for implicit update
-					{
-						gridUpdate::assemble_BNL(ds);
-						gridUpdate::assemble_global_implicit(object, gdp, primoff, ds, parms, w, use_vic);
-					}
-					if (__explicit__)
-					{
-						gridUpdate::assemble_global(object, gdp, primoff, ds, parms, use_vic);
-					}
-				}
-
-				if (__explicit__)
-				{
-					gridUpdate::step_solution_exp(gdp, ds, parms, w);
-				}
-
-				if (!__explicit__)
-				{
-					//solve systems of equations
-					gridUpdate::apply_inertia(ds, gdp, w);
-					DiagonalPreconditioner diagonal_preconditioner(ds.global_stiffness);
-					UT_Functor2<void, const UT_Vector&, UT_Vector&> multiply_full(
-						&ds.global_stiffness, &UT_SparseMatrix::multVec
-					);
-
-					int cp = 200;
-					double error = 0.000000000000001;
-					IterationTester iteration_tester(cp, error);
-					UT_Functor2<bool, int, const UT_Vector&> keep_iterating(iteration_tester);
-					UT_Functor2<void, const UT_Vector&, UT_Vector&>
-						preconditioner_full(diagonal_preconditioner);
-
-					UT_MatrixIterSolver::PCG(
-						ds.X, ds.global_force,
-						multiply_full,
-						preconditioner_full,
-						keep_iterating
-					);
-
-					gridUpdate::step_solution_imp(gdp, ds, w, parms);
-				}
-			}
+			if(!is_2D)
+				SOLVE_LINEAR::SOLVE_3D(object, gdp, parms, w,  sub_steps, __explicit__);
+			else if(is_2D)
+				SOLVE_LINEAR::SOLVE_2D(object, gdp, parms, w, sub_steps, __explicit__);
+		
+			gdp->bumpAllDataIds();
 		}
 	}
-	return SIM_SOLVER_SUCCESS;
+
+	return state ? SIM_SOLVER_SUCCESS : SIM_SOLVER_FAIL;
 }
 

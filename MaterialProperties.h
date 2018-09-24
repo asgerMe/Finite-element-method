@@ -5,7 +5,7 @@
 struct Material
 {
 	float viscosity = 100;
-	float youngs_modulus = 1000;
+	float youngs_modulus = 100;
 	float poisson_ratio = 0.25;
 	float density = 1;
 	float dt = 0.1;

@@ -13,6 +13,26 @@ Collider::Collider()
 {
 
 }
+
+void Collider::calculate_element_hessian(const GU_Detail *gdp, const GA_Primitive *prim, const Data_struct_2D &ds, unsigned int i, unsigned int j)
+{
+	GA_OffsetArray offset_array;
+	const GA_Offset primoff = prim->getMapOffset();
+	gdp->getEdgeAdjacentPolygons(offset_array, primoff);
+	
+	GA_Offset n_offset = offset_array(i);
+	const GA_Primitive *n_prim = gdp->getPrimitive(n_offset);
+	fpreal n_area = n_prim->calcArea();
+	fpreal area = prim->calcArea();
+	fpreal A_An = 3.0 / (n_area + area);
+	GA_Iterator pointit(prim->getPointRange());
+
+	GA_Offset ptoff1 = prim->getPointOffset(0);
+	GA_Offset ptoff2 = prim->getPointOffset(1);
+	GA_Offset ptoff3 = prim->getPointOffset(2);
+		
+}
+
 bool Collider::is_surface(const GA_Detail *gdp, const GA_Offset &ptoff, const char* surface_group_name)
 {
 	const GA_PointGroup *found_group = gdp->findPointGroup(surface_group_name);
@@ -21,9 +41,10 @@ bool Collider::is_surface(const GA_Detail *gdp, const GA_Offset &ptoff, const ch
 		bool at_surface = found_group->contains(ptoff);
 		return at_surface;
 	}
+
 	return false;
 }
-void Collider::apply_external_forces(const SIM_Object& object, const UT_Vector3 &pos, const UT_Vector3 &v, UT_Vector3 &result)
+void Collider::apply_external_forces(const SIM_Object& object, const double &mass, const UT_Vector3 &pos, const UT_Vector3 &v, UT_Vector3 &result)
 {
 
 	const SIM_Geometry *geometry = object.getGeometry();
@@ -42,7 +63,7 @@ void Collider::apply_external_forces(const SIM_Object& object, const UT_Vector3 
 	{
 		UT_Vector3 result_force;
 		const SIM_Force* force = SIM_DATA_CASTCONST(sim_forces(fi), SIM_Force);
-		force->getForce(object, pos, v, ang_vel, 1, result_force, torque);
+		force->getForce(object, pos, v, ang_vel, mass, result_force, torque);
 		result += result_force;
 		
 	}

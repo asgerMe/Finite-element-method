@@ -16,6 +16,15 @@
     <ClCompile Include="C:\Users\Asger\Desktop\visco\build\Collision.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="C:\Users\Asger\Desktop\visco\build\Solve_System.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="templates.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="solve_linear_templates.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="C:\Users\Asger\Desktop\visco\build\SIM_FEMSolver.h">
@@ -34,6 +43,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="C:\Users\Asger\Desktop\visco\build\Collision.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\Asger\Desktop\visco\build\Solve_System.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
